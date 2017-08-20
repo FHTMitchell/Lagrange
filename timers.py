@@ -2,6 +2,10 @@
 
 import time
 
+__author__ = 'Mitchell, FHT'
+__date__ = (2017, 8, 20)
+__verbose__ = True
+
 def timestamp(unix_time = None, show_zone = True):
     """Show time (current if None) in the format 'yyyy-mm-dd HH:MM:SS [TZ]'"""
     if unix_time is None:

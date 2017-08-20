@@ -7,6 +7,10 @@ from sympy.utilities.lambdify import lambdastr as _lambdastr
 from sympy.core.function import AppliedUndef
 from typing import *
 
+__author__ = 'Mitchell, FHT'
+__date__ = (2017, 8, 20)
+__verbose__ = True
+
 # needs to be at the top for typing.
 class AutoFunc:
     """

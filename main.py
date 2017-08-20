@@ -4,6 +4,10 @@ from driver import Driver
 from problem import Lagrange
 from solver import Newton
 
+__author__ = 'Mitchell, FHT'
+__date__ = (2017, 8, 20)
+__verbose__ = True
+
 def lagrange(x0=-1e-2, v0=1e-3, dx=1e-5):
     """
     4 months of work... for this?!?!

@@ -5,6 +5,10 @@ from method import Method
 from collections import deque
 from typing import *
 
+__author__ = 'Mitchell, FHT'
+__date__ = (2017, 8, 20)
+__verbose__ = True
+
 class Stepper:
 
     def __init__(self,  stepsize_control: Callable, explicit: Method,

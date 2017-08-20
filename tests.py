@@ -8,6 +8,10 @@ from driver import Driver
 from solver import Newton
 from pprint import pprint
 
+__author__ = 'Mitchell, FHT'
+__date__ = (2017, 8, 20)
+__verbose__ = True
+
 
 def test_driver(zeta=0):
     shm = SHM(1, {'zeta': zeta})

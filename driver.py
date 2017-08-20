@@ -11,7 +11,7 @@ from timers import Timer
 from typing import *
 
 __author__ = 'Mitchell, FHT'
-__date__ = (2017, 7, 28)
+__date__ = (2017, 8, 20)
 __verbose__ = True
 
 def static_stepsize_control_factory(h: float) -> Callable:
