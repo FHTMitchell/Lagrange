@@ -1,7 +1,7 @@
 #stepper.py
 
 import numpy as np
-from .method import Method
+from . import method as _method
 from collections import deque
 from typing import *
 
@@ -11,8 +11,8 @@ __verbose__ = True
 
 class Stepper:
 
-    def __init__(self,  stepsize_control: Callable, explicit: Method,
-                 implicit: Method = None):
+    def __init__(self,  stepsize_control: Callable, explicit: _method.Method,
+                 implicit: _method.Method = None):
 
         self.stepsize_control = stepsize_control
         self.explicit = explicit

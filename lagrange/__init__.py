@@ -34,4 +34,4 @@ _ver_assert(_np, (1, 11, 3))
 _ver_assert(_sp, (1, 0))
 _ver_assert(_mpl, (2, 0, 0))
 
-from . import driver, main, problem, solver, tests
+from . import driver, problem, solver

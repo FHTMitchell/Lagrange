@@ -3,9 +3,9 @@
 import numpy as np
 import sympy as sp
 import matplotlib.pyplot as plt
-from problem import SHM, RTBP, Lagrange
-from driver import Driver
-from solver import Newton
+from .problem import SHM, RTBP, Lagrange
+from .driver import Driver
+from .solver import Newton
 from pprint import pprint
 
 __author__ = 'Mitchell, FHT'

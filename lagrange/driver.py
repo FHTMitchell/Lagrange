@@ -4,9 +4,9 @@
 import collections
 import numpy as np
 
-from .method import methods
-from .stepper import Stepper
-from .problem import Problem
+from . import method as _method
+from . import stepper as _stepper
+from . import problem as _problem
 from .timers import Timer
 
 from typing import *
@@ -26,7 +26,7 @@ valid_problems = {'rtbp', 'shm'}
 
 class Driver:
     def __init__(self,
-                problem: Problem,
+                problem: _problem.Problem,
                 h0: float,
                 K: int,
                 L: int = 1,
@@ -51,7 +51,7 @@ class Driver:
         """
 
 
-        assert isinstance(problem, Problem), repr(problem)
+        assert isinstance(problem, _problem.Problem), repr(problem)
         assert h0 > 0, repr(h0)
         assert isinstance(K, int) and K >= 1, repr(K)
         assert isinstance(L, int) and L >= 1, repr(L)
@@ -75,14 +75,14 @@ class Driver:
         self.explicit_free_params = explicit_free_params or {}
         self.implicit_free_params = implicit_free_params or {}
 
-        self.Method = methods()[self.method_name]
+        self.Method = _method.methods()[self.method_name]
         self.explicit = self.Method(K, L, 'explicit', self.explicit_free_params)
         if corrector_steps > 0:
             self.implicit = self.Method(K, L, 'implicit', self.implicit_free_params)
         else:
             self.implicit = None
 
-        self.stepper = Stepper(self.stepsize_control, self.explicit, self.implicit)
+        self.stepper = _stepper.Stepper(self.stepsize_control, self.explicit, self.implicit)
 
 
     def run(self, y0: np.ndarray, *, t0=None, tf=None) -> Tuple[np.ndarray, np.ndarray]:
