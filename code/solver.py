@@ -1,7 +1,7 @@
 # solver.py
 
 import numpy as np
-from timers import Timer
+from .timers import Timer
 from typing import *
 
 __author__ = 'Mitchell, FHT'

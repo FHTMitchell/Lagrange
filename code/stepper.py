@@ -1,7 +1,7 @@
 #stepper.py
 
 import numpy as np
-from method import Method
+from .method import Method
 from collections import deque
 from typing import *
 

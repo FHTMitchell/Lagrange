@@ -6,9 +6,10 @@ import numpy as np
 import sympy as sp
 import matplotlib.pyplot as plt
 
-import dsympy
-from timers import Timer
+from . import dsympy
+from .timers import Timer
 from typing import *
+import warnings
 
 __author__ = 'Mitchell, FHT'
 __date__ = (2017, 8, 20)
@@ -20,7 +21,12 @@ x, y, z = (sp.Function(s)(t) for s in 'xyz')
 vx, vy, vz = [sp.diff(s, t) for s in (x, y, z)]
 rho = x ** 2 + y ** 2 + z ** 2
 
-fig_path = r'D:\GoogleDrive\Work\Year 5\MScProject\Fergus Mitchell MSc (Obrechkoff)\Code\figs'
+
+try:
+    fig_path = os.path.join(__file__, '..', 'figs')
+except NameError:
+    warnings.warn('fig_path unable to be automatircally created. '
+                 'Please set problem.fig_path')
 
 
 def problems():

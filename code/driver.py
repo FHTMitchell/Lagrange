@@ -4,10 +4,11 @@
 import collections
 import numpy as np
 
-from method import methods
-from stepper import Stepper
-from problem import Problem
-from timers import Timer
+from .method import methods
+from .stepper import Stepper
+from .problem import Problem
+from .timers import Timer
+
 from typing import *
 
 __author__ = 'Mitchell, FHT'

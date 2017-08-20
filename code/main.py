@@ -1,8 +1,8 @@
 # main.py
 
-from driver import Driver
-from problem import Lagrange
-from solver import Newton
+from .driver import Driver
+from .problem import Lagrange
+from .solver import Newton
 
 __author__ = 'Mitchell, FHT'
 __date__ = (2017, 8, 20)
