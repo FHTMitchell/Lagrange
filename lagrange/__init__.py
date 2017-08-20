@@ -1,5 +1,7 @@
 # __init__.py
 
+# TODO fix this weird circular import bug
+
 import sys
 import warnings
 
