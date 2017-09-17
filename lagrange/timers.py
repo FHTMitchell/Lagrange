@@ -4,9 +4,10 @@ import time
 
 __author__ = 'Mitchell, FHT'
 __date__ = (2017, 8, 20)
-__verbose__ = True
+VERBOSE = True
 
-def timestamp(unix_time = None, show_zone = True):
+
+def timestamp(unix_time=None, show_zone=True):
     """Show time (current if None) in the format 'yyyy-mm-dd HH:MM:SS [TZ]'"""
     if unix_time is None:
         unix_time = time.time()
@@ -14,6 +15,7 @@ def timestamp(unix_time = None, show_zone = True):
     if show_zone:
         str_ += ' %z'
     return time.strftime(str_, time.localtime(unix_time))
+
 
 def time_diff_repr(unix_start, unix_end=0, unit=None, sig=1):
     unit_dict = {
@@ -46,10 +48,7 @@ def time_diff_repr(unix_start, unix_end=0, unit=None, sig=1):
             raise
 
 
-
-
 class Clock(object):
-
     time = staticmethod(time.time)
 
     @staticmethod
@@ -61,14 +60,12 @@ class Clock(object):
                                         self.ftime)
 
 
-
 class Stopwatch(Clock):
     """
     A stopwatch, starts counting from first instancing and upon restart().
     Call an instance to find the time in seconds since timer started/restarted.
     Call str to print how much time has past in reasonable units.
     """
-
 
     def __init__(self):
         self._tic = time.time()
@@ -98,15 +95,13 @@ class Stopwatch(Clock):
 
     def __repr__(self):
         return '<{}: tic=`{}`>'.format(self.__class__.__name__,
-                                     timestamp(self.tic))
+                                       timestamp(self.tic))
 
     def __str__(self):
         return self.ftoc()
 
 
-
 class Timer(Stopwatch):
-
     def __init__(self, checktime=5):
         super(Timer, self).__init__()
         self.checktime = checktime
@@ -114,8 +109,8 @@ class Timer(Stopwatch):
 
     def __repr__(self):
         return '<{}: tic=`{}`, checktime={}>'.format(self.__class__.__name__,
-                                                    timestamp(self.tic),
-                                                    self.checktime)
+                                                     timestamp(self.tic),
+                                                     self.checktime)
 
     def check(self, checktime=None):
         if checktime is None:

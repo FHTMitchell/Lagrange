@@ -1,19 +1,23 @@
 # method.py
 
-import numpy as np
-import sympy as sp
 from collections import deque
 from typing import *
 
+import numpy as np
+import sympy as sp
+
+from .bases import Base
+
 __author__ = 'Mitchell, FHT'
 __date__ = (2017, 8, 20)
-__verbose__ = True
+VERBOSE = True
+
 
 def methods():
-    return {cls.__name__.lower(): cls for cls in Method.__subclasses__()}
+    return {c.__name__.lower(): c for c in Method.subclasses()}
 
-class Method:
 
+class Method(Base):
     def __init__(self, maxK, L=1, mode='explicit', free_params=None):
         """
         
@@ -30,22 +34,20 @@ class Method:
         assert isinstance(maxK, int) and (0 < maxK), maxK
 
     def __repr__(self):
-        return f'method.{self.__class__.__name__}(maxK={self.maxK}, L={self.L}, mode={self.mode!r})'
+        return self._make_repr('maxK', 'L', mode=repr(self.mode))
 
     def explicit(self, yd: deque, h: float, k: int) -> np.ndarray:
         raise NotImplementedError
 
-    def implicit(self, yd: deque, ynd: np.ndarray, h: float, k: int) -> np.ndarray:
+    def implicit(self, yd: deque, ynd: np.ndarray, h: float,
+                 k: int) -> np.ndarray:
         raise NotImplementedError
 
 
-
 class Obr(Method):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.alphas = {k: self.coeffs(k) for k in range(1, self.maxK + 1)}
-
 
     def explicit(self, yd: deque, h: float, k: int):
         nexty = sum(
@@ -54,8 +56,8 @@ class Obr(Method):
 
         return nexty
 
-
-    def implicit(self, yd: deque, ynd: Union[list, np.ndarray], k: int, h: float):
+    def implicit(self, yd: deque, ynd: Union[list, np.ndarray], k: int,
+                 h: float):
         explicit_part = sum(
             h**i * sum(self.alphas[k][i][j] * yd[j][i] for j in range(0, k))
             for i in range(0, self.L + 1))
@@ -63,10 +65,12 @@ class Obr(Method):
         implicit_part = sum(h**i * self.alphas[k][i][k] * ynd[i]
                             for i in range(1, self.L + 1))
 
+        # if np.any(np.isnan(explicit_part)):
+        #     print('nan encountered')
+
         thisy = explicit_part + implicit_part
 
         return thisy
-
 
     def coeffs(self, K) -> List[List[float]]:
 
@@ -99,7 +103,7 @@ class Obr(Method):
                     alpha = [[a, b, 1 - a - b, -1],
                              [(5 + 4 * a - b) / 12, (-4 + 4 * a + 2 * b) / 3,
                               (23 + 4 * a + 5 * b) / 12]]
-                if L == 2:
+                if L == 2:  # TODO: This is wrong (for a = b = 0)
                     alpha = [[a, b, 1 - a - b, -1],
                              [(581 + 112 * a + 11 * b) / 240,
                               (38 + 16 * a + 8 * b) / 15,
@@ -183,7 +187,8 @@ class Obr(Method):
         try:
             alpha
         except NameError:
-            msg = f"Have no coefficients for K = {K}, L = {L} and mode = {self.mode!r}"
+            msg = f"Have no coefficients for K = {K}, L = {L} and mode = " \
+                  f"{self.mode!r}"
             raise ValueError(msg)
 
         free_params = self.free_params.copy()
@@ -210,18 +215,17 @@ class Obr(Method):
                     except AttributeError:
                         pass
                     except TypeError:  # Should never reach here
-                        msg = 'Missing one of param obr.a, obr.b or obr.c in consts'
+                        msg = 'Missing one of param obr.a, obr.b or obr.c in ' \
+                              'consts'
                         raise ValueError(msg)
 
         return alpha
 
 
 class Adams(Method):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.L == 1, self.L
-
 
     def nabla(self, yd: deque, n: int, i: int = -1) -> np.ndarray:
         """
@@ -245,7 +249,6 @@ class Adams(Method):
         else:
             raise ValueError(f'n must be 0 or greater, not {n!r}.')
 
-
     def gamma(self, j: int) -> float:
         """
         Return the adams constant gamma for a given integer j.
@@ -262,15 +265,16 @@ class Adams(Method):
         else:
             raise ValueError(f'j must be 0 or greater, not {j!r}.')
 
-
     def explicit(self, yd: deque, h: float, k: int) -> np.ndarray:
         """
-        Return y[n+k] given a list of y, a list of y_derivs (equal to f) and other 
+        Return y[n+k] given a list of y, a list of y_derivs (equal to f) and 
+        other 
         parameters. Exact same signature as obr.make_obr().
 
         :param yd: deque[list[np.ndarray[float]]]
             A deque of the previous k derivatives y, seen as a list of 
-            [y, dy/dt, ...] of length l. Each element of the list is an ndarray of 
+            [y, dy/dt, ...] of length l. Each element of the list is an 
+            ndarray of 
             length len(y) of floats representing the jth derivative of y[i].
 
         :param h: float 
@@ -280,13 +284,13 @@ class Adams(Method):
             Number of previous steps to use
 
 
-        :return: np.array
+        :return: np.ndarray
             The next iteration of y, ie. y[len(y) + 1]
         """
         # assert isinstance(h, float) and h > 0, repr(h)
         # assert isinstance(k, int) and k >= 1, repr(k)
-        return yd[0][-1] + h * np.sum([self.gamma(j) * self.nabla(yd[1], n=j, i=-1)
-                                   for j in range(k)], axis=0)
+        return yd[0][-1] + h*np.sum([self.gamma(j)*self.nabla(yd, n=j, i=-1)
+                                     for j in range(k)], axis=0)
 
         # could replace y[-1] with yd[-1][0] and remove the y paramater
         # from this and obr.obr
