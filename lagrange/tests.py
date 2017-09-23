@@ -1,6 +1,8 @@
 # tests.py
 
+import collections
 import sys
+from pprint import pprint
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,7 +13,8 @@ __author__ = 'Mitchell, FHT'
 __date__ = (2017, 8, 20)
 VERBOSE = True
 
-init = [-0.1, 0, 0, 0, 0.7698, 0]
+init0 = [-0.1, 0, 0, 0, 0.7698, 0]
+init = [-0.05, 0, 0, 0, 0.35, 0]
 
 test_halo = np.multiply([-1505994.497477462 + (lagrange.bodies.earth.sma/1e3),
                          207178.9433070129,
@@ -30,7 +33,7 @@ def get_driver(drivername, problem, **kwargs):
     if drivername == 'driver':
         driver = lagrange.driver.Driver(problem, **kwargs)
     elif drivername == 'scipy':
-        driver = lagrange.driver.SciPy(problem, **kwargs)
+        driver = lagrange.driver.SciPyODE(problem, **kwargs)
     else:
         raise ValueError(f"drivername must be 'driver' or 'scipy', not "
                          f"{drivername!r}")
@@ -67,7 +70,7 @@ def test_rtbp(plot=True, steps=1e4, drivername='driver', method='obr'):
               'corrector_steps': 1 if method == 'obr' else 0}
 
     driver = get_driver(drivername, problem, h0=h0, K=K, L=L, tf=tf, **kwargs)
-    solver = lagrange.solver.Newton(driver.displacement, atol=1e-20, rtol=1e-8)
+    solver = lagrange.solver.Newton(driver.displacement, atol=1e-2)
 
     log(*(repr(x) for x in (problem, driver, solver)), sep='\n\n')
     log(f"nmu = {problem.mu:5g}")
@@ -106,7 +109,9 @@ def test_lagrange(plot=True, legendre_order=3, drivername='driver',
     driver = get_driver(drivername, problem, h0=h0, K=K, L=L, tf=tf,
                         method_name=method)
 
-    solver = lagrange.solver.Root(driver.displacement, atol=1e-12)
+    ################# SOLVERS ##################################################
+    solver = lagrange.solver.Newton(driver.cost_function, atol=0.001)
+    ################# SOLVERS ##################################################
 
     log(*(repr(x) for x in (problem, driver, solver)), sep='\n\n')
 
@@ -123,43 +128,56 @@ def test_lagrange(plot=True, legendre_order=3, drivername='driver',
 
     log(f"init = \n{init}, \ntf = {tf:.5g}.")
 
-    if solver.__class__.__name__ == 'Root':
-        kwargs = {}
-    elif solver.__class__.__name__ == 'Newton':
-        kwargs = {'dx': 1e-4}
-    else:
-        raise ValueError(solver)
+    x0 = init[0]
+    vy0 = init[4]
 
-    ans = init
-    # ans = solver.partsolve(0.2, [-0.1, 0, 0, 0, None, 0], **kwargs)
-    # ans = solver.solve(init, **kwargs)
+    kwargs = {}
+    # if solver._name.lower() == 'newton':
+    #     kwargs['dx0'] = None
 
+    print(f'Using the {solver._name} solver with tolerance {solver.atol:.1e}')
+    vy, period = solver.solve(vars=(vy0, tf), consts=(x0,), **kwargs)
+    tf0, y0 = problem.cost_init((vy, period), x0)
+    t, y = driver.run(y0, tf=tf0)
 
-    t, y = driver.run(ans)
-
-    if True:
+    if False:
         stack = np.column_stack((t, y))
         print(stack.shape)
         np.savetxt("../matlab/y.csv", stack, delimiter=", ")
         print('saved to file')
 
+    if VERBOSE:
+        log('',
+            '-'*70,
+            'Start Initial values:',
+            f'\ttau = {tf:.5g}',
+            f'\ty0 = \n\t{y0}',
+            'End Initial Values:',
+            f'\ttau = {t[-1]-t[0]}',
+            f'\ty0 = \n\t{y[0]}',
+            'Final Values:',
+            f'\tyf = \n\t{y[-1]}',
+            sep='\n')
+
     if plot:
         lo = legendre_order
-        title = fr'$t_f={tf:.1g},\ h={h0:.1g},\ L_n = L_{lo}$'
+        title = fr'$\tau={period:.5g},\ h={h0:.1g},\ L_n = L_{lo}$' \
+                '\n' \
+                fr'$x_0={y0[0]:.4f},\ \dot{{y}}_0={y0[4]:.4f}$'
         problem.plot(t, y, show=False, title='y vs x: ' + title)
         # problem.plot(t, y,  mode='xy', title='xy vs t: ' + title)
         plt.show()
 
-    return ans
+    return y
 
 
-def test_solver():
+def test_solver(run=1):
     """
     url = http://fourier.eng.hmc.edu/e176/lectures/NM/node21.html
     """
-    x0 = np.ones(3)
 
-    def f(x):
+    def f1(x):
+
         x1, x2, x3 = x
 
         y1 = 3*x1 - np.cos(x2*x3) - 3/2
@@ -168,9 +186,26 @@ def test_solver():
 
         return np.asarray([y1, y2, y3])
 
-    solver = lagrange.solver.Root(f, max_runs=10)
+    def f2(x):
 
-    ans = np.asarray(solver.solve(x0))
+        x1, x2, x3 = x
+
+        y1 = x1**2 - 2*x1 + x2**2 - x3 + 1
+        y2 = x1*x2**2 - x1 - 3*x2 + x2*x3 + 2
+        y3 = x1*x3**2 - 3*x3 + x2*x3**2 + x1*x2
+
+        return np.asarray([y1, y2, y3])
+
+    if run == 1:
+        x0 = np.ones(3)
+        f = f1
+    else:
+        x0 = np.array([1, 2, 3])
+        f = f2
+
+    solver = lagrange.solver.Newton(f, max_runs=10, atol=1e-6)
+
+    ans = np.asarray(solver.solve(x0, dx0=1e-10, all_out=True))
     log(ans)
 
 
@@ -180,9 +215,165 @@ def test_generate_sun_earth():
     log(lag.lagrange_points())
 
 
+################################################################################
+######################### EFFICIENCY TESTS #####################################
+################################################################################
+
+def test_find_num_calls(h0=0.05, plot=False, verbose=2, lk=None):
+    def log(*args, **kwargs):
+        if verbose:
+            print(*args, **kwargs)
+
+    def log2(*args, **kwargs):
+        if verbose > 1:
+            print(*args, **kwargs)
+
+    if not lk:
+        lk = {1: (1, 2, 3, 4), 2: (1, 2, 3), 3: (1, 2), 4: (1,)}
+
+    Res = collections.namedtuple('Res', 'err, calls, time')
+    y0 = np.array([1, 0])
+    t0 = 0
+    tf = 1000*2*np.pi
+
+    res = {}
+
+    for l in lk.keys():
+        shm = lagrange.problem.SHM(L=l, mapping=dict(zeta=0))
+        sympy_xf = shm.analytical_factory(y0)[0]
+        log2(f'xlast = {sympy_xf(tf):.3f}')
+        for k in lk[l]:
+            title = f'h0 = {h0}, L = {l}, K = {k}'
+            log2(f'RUNNING: {title}...')
+            shm.calls = 0
+            driver = lagrange.driver.Driver(shm, h0, k, l, t0, tf, 'obr')
+            t, y = driver.run(y0)
+            calls = shm.calls
+            time = driver.time
+            err, t_last, y_last = _err(t, y, h0, sympy_xf)
+            res[(l, k)] = Res(err, calls, time)
+            log2('*'*30, f'{title}:', res[(l, k)], '*'*30, sep='\n')
+            if plot:
+                shm.plot(t_last, y_last, y0=y0, title=f'${title}$')
+
+    log('\n', '-'*80, '\n', '-'*80)
+    log(f'h0 = {h0}')
+    _print_res(res, verbose)
+
+    return res
+
+
+def _err(t, y, h0, sympy_xf):
+    _last_period = slice(int(-2*np.pi/h0), None)
+    y_last = y[_last_period]
+    t_last = t[_last_period]
+    anal_x = [sympy_xf(ti) for ti in t_last]
+    diff = np.abs(y_last[:, 0] - anal_x)
+    err = np.log10(np.mean(diff))
+    return err, t_last, y_last
+
+
+def _print_res(r, verbose=True):
+    if not verbose:
+        return
+    for (l, k), (err, calls, time) in r.items():
+        print(f'l = {l}, k = {k}:  err = 10^{err:.2f}, calls = {calls:,}'
+              f' time={time:.2e} s')
+
+
+def test_var_h0(max=0.5, min=0.05, steps=5, *, save=False):
+    timer = lagrange.timers.Stopwatch()
+    file = '../results/results.py'
+    resdict = {}
+    h0s = np.linspace(min, max, steps)
+    for h0 in h0s:
+        print('/'*80, f'h0 = {h0}', '/'*80, '\n', sep='\n')
+        resdict[h0] = test_find_num_calls(h0, verbose=2)
+
+    print()
+    for i in range(4):
+        print('/'*80)
+    for h0, res in resdict.items():
+        print('*'*80)
+        print(f'h0 = {h0}')
+        _print_res(res)
+    print(f'\n Total time elapsed: {timer()}')
+    if save:
+        with open(file, 'w') as f:
+            f.write("import collections\n"
+                    "from numpy import nan, inf\n"
+                    "Res = collections.namedtuple('Res', 'err, calls, time')\n"
+                    f"resdict = {resdict}")
+    return resdict
+
+
+def test_compare_ints(save=False):
+    L = 3
+    K = 2
+    t0 = 0
+    tf = 2000*np.pi
+    mapping = {'zeta': 0}
+    y0 = np.array([1, 0])
+
+    shm_obr = lagrange.problem.SHM(L, mapping)
+    shm_other = lagrange.problem.SHM(1, mapping)
+    sympy_xf = shm_obr.analytical_factory(y0)[0]
+    Res = collections.namedtuple('Res', 'err, calls')
+
+    names = ('obr', 'rk', 'adams')
+    resdict = {name: {} for name in names}
+
+    timer = lagrange.timers.Stopwatch()
+    for h in np.linspace(0.05, 0.5, 10):
+        if VERBOSE:
+            print('', '/'*80, f'h = {h}', '/'*80, sep='\n')
+
+        driver_obr = lagrange.driver.Driver(shm_obr, h, K, L, t0, tf, 'obr')
+        driver_ode45 = lagrange.driver.SciPyODE(shm_other, h, K, t0, tf,
+                                                'ode45')
+        driver_adams = lagrange.driver.SciPyODE(shm_other, h, K, t0, tf,
+                                                method_name='adams')
+
+        drivers = (driver_obr, driver_ode45, driver_adams)[::-1]
+        names = names[::-1]
+
+        for name, driver in zip(names, drivers):
+            if name == 'adams':
+                continue
+            if VERBOSE:
+                print(f'Running {name} @ h = {h}')
+            shm_other.calls = 0
+            shm_obr.calls = 0
+            t, y = driver.run(y0)
+            calls = max((shm_other.calls, shm_obr.calls))
+            err, tl, yl = _err(t, y, h, sympy_xf)
+            resdict[name][h] = Res(err, calls)
+
+            if VERBOSE:
+                print(f'Time elapsed: {timer()}')
+
+    if save:
+        with open('../results/ints.py', 'w') as f:
+            f.write("import collections\n"
+                    "from numpy import nan, inf\n"
+                    "Res = collections.namedtuple('Res', 'err, calls')\n"
+                    f"resdict = {resdict}")
+
+    if VERBOSE:
+        pprint(resdict)
+        print()
+        print(f'Time elapsed: {timer()}')
+
+    return resdict
+
+
+
+
 if __name__ == '__main__':
     # test_rtbp(plot=True, drivername='scipy')
-    test_lagrange(plot=True, legendre_order=4, drivername='driver',
-                  method='obr')
+    # test_lagrange(plot=True, legendre_order=4, drivername='driver', method='obr')
     # test_driver(drivername='scipy')
-    # test_solver()
+    # test_solver(2)
+    # test_find_num_calls(0.5, plot=1, verbose=2)
+    # test_var_h0(save=0, steps=10)
+    test_compare_ints(True)

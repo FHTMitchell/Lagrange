@@ -14,10 +14,14 @@ __date__ = (2017, 8, 20)
 VERBOSE = True
 
 
+def solvers():
+    return {c.__name__.lower(): c for c in Solver.subclasses()}
+
+
 class Solver(Base):
-    # ABC for later?
+
     def __init__(self, func: Callable, *,
-                 atol: float = 1e-8, max_runs: int = 100):
+                 atol: float = 1e-5, max_runs: int = 100):
         self.func = func
         self.atol = atol
         self.max_runs = max_runs
@@ -35,62 +39,96 @@ class Newton(Solver):
     """
 
     # noinspection PyMethodOverriding
-    def solve(self, y0: np.ndarray, dx: float, *, func: Callable = None,
-              ret_all_y: bool = False) -> np.ndarray:
+    def solve(self, vars: np.ndarray, consts: Tuple = (),
+              dx0: Union[float, np.ndarray] = None, *,
+              func: Callable = None, all_out: bool = False) -> np.ndarray:
+
+        # TODO: Newton is broken since small changed in period do nothing
+
         if func is None:
             func = self.func
-        y0 = np.array(y0, ndmin=1)
-        assert len(y0.shape) == 1
 
-        size = len(y0)
-        zero = np.zeros(size)
-        J = np.empty((size, size))
+        vars = np.array(vars, ndmin=1, dtype=float, copy=False)
+        assert len(vars.shape) == 1
 
-        y = [y0]
+        if dx0 is None:
+            dx0 = vars/1e3
+        elif isinstance(dx0, (int, float)):
+            dx0 = np.ones(vars.shape)*dx0
+        dx = np.array(dx0)
+        assert dx.shape == vars.shape
+
+        N = len(vars)
+        ins = [vars]
 
         timer = Timer(5)
         for run in range(self.max_runs):
-            y1 = func(y[-1])
+            out1 = func(ins[-1], *consts)
+            if run == 0:
+                M = len(out1)
+                zero = np.zeros(M)
+                J = np.zeros((M, N))
 
-            if np.isclose(y1, zero, atol=self.atol).all():
+            if np.isclose(np.linalg.norm(out1), 0, atol=self.atol):
                 if VERBOSE:
                     print(f'Solution reached. Time taken: {timer()}.\n')
-                return y
+                break
 
-            for index in range(size):
-                dy = np.zeros(size)
-                dy[index] = dx
-                J[:, index] = (func(y[-1] + dy) - y1)/dx
+            for index in range(N):
+                dy = np.zeros(N)
+                dy[index] = dx[index]
+                out2 = func(ins[-1] + dy, *consts)  # lots of vars
+                dout = out2 - out1  # for debugging
+                diff = dout/dx[index]  #
+                if np.all(diff == 0):
+                    warnings.warn(f'Got a no-diff in Newton:\n{out2}')
+                    return ins if all_out else ins[-1]
+                    ## diff = np.random.random(diff.shape) * dx
+                J[:, index] = diff
+
 
             if VERBOSE:
                 print(f"Completed run {run}. Time taken: {timer()}.")
+                print(f"Error was {np.linalg.norm(out1):.5g}")
 
-            y.append(y[-1] - np.linalg.inv(J)@y1)
+            # x1 = x0 - J^{-1} @ y0
+
+            if J.shape[0] == J.shape[1]:  # square
+                Jinv = np.linalg.inv(J)
+            else:
+                Jinv = np.linalg.inv(J.T@J)@J.T
+
+            ins_next = ins[-1] - Jinv@out1
+            ins.append(ins_next)
+            dx = ins[-1] - ins[-2]
 
             if VERBOSE:
-                print('*'*60, y[-1], '*'*60, sep='\n')
+                print('*'*60, ins[-1], '*'*60, sep='\n')
                 print('_'*60)
 
-            if np.any(np.isnan(y[-1])) or np.any(np.isinf(y[-1])):
-                warnings.warn(f'Encountered invalid value: {y[-1]!s}')
+            if np.any(np.isnan(ins[-1])) or np.any(np.isinf(ins[-1])):
+                warnings.warn(f'Encountered invalid value: {ins[-1]!s}')
                 break
+        else:
+            if VERBOSE:
+                print(
+                    f"max_runs {self.max_runs} reached. Time taken: {timer()}")
 
-        if VERBOSE:
-            print(f"max_runs {self.max_runs} reached. Time taken: {timer()}")
-
-        return y if ret_all_y else y[-1]
+        return ins if all_out else ins[-1]
 
 
 class Root(Solver):
     """
-    Scipy Solver - return only final value
+    Scipy Solver root - return only final value
     """
 
-    def solve(self, args, consts=(), *, func: Callable = None,
+    def solve(self, vars, consts=(), *, func: Callable = None,
               all_out: bool = False, **kwargs):
 
         if func is None:
             func = self.func
+
+        vars = np.asarray(vars, dtype=float)
 
         if not isinstance(consts, (tuple)):
             raise ValueError(
@@ -104,6 +142,67 @@ class Root(Solver):
         if 'maxiter' not in kwargs['options']:
             kwargs['options']['maxiter'] = self.max_runs
 
-        out = optimize.root(func, args, method='broyden1', **kwargs)
+        out = optimize.root(func, vars, args=consts, **kwargs)
 
         return out if all_out else out.x
+
+
+class Fsolve(Solver):
+    """
+    Scipy Solver  fsolve - return only final value
+    """
+
+    def solve(self, vars, consts=(), *, func: Callable = None,
+              all_out: bool = False, **kwargs):
+
+        if func is None:
+            func = self.func
+
+        vars = np.asarray(vars, dtype=float)
+
+        if not isinstance(consts, (tuple)):
+            raise ValueError(
+                f'consts must be a tuple, not {type(consts).__name__}')
+
+        if 'xtol' not in kwargs:
+            kwargs['xtol'] = self.atol
+
+        if 'maxfev' not in kwargs:
+            kwargs['maxfev'] = self.max_runs*(len(vars) + 1)
+
+        kwargs['full_output'] = True
+
+        out = optimize.fsolve(func, vars, args=consts, **kwargs)
+
+        return out if all_out else out[0]
+
+
+class Broyden(Solver):
+    """
+    Scipy Solver  broyden1 - return only final value
+    """
+
+    def solve(self, vars, consts=(), *, func: Callable = None,
+              all_out: bool = VERBOSE, **kwargs):
+
+        if func is None:
+            func = self.func
+        func1 = lambda x: func(x, *consts)
+
+        vars = np.asarray(vars, dtype=float)
+
+        if not isinstance(consts, (tuple)):
+            raise ValueError(
+                f'consts must be a tuple, not {type(consts).__name__}')
+
+        if 'f_tol' not in kwargs:
+            kwargs['f_tol'] = self.atol
+
+        if 'maxiter' not in kwargs:
+            kwargs['maxiter'] = self.max_runs*(len(vars) + 1)
+
+        kwargs['verbose'] = all_out
+
+        out = optimize.broyden1(func1, vars, **kwargs)
+
+        return out

@@ -1,5 +1,6 @@
 # problem.py
 
+import numbers
 import os
 import warnings
 from typing import *
@@ -67,6 +68,8 @@ class Problem(Base):
         self._nargs = (L + self.norder) * self.ncoords
         # The (private) number of arguments in funcs
 
+        self.calls = 0
+
         self.L = L
         self.mapping = self.default_mapping.copy()
         if mapping is None:
@@ -109,11 +112,11 @@ class Problem(Base):
         dparams = self.dparams()
         mapping = self.mapping.copy()
 
-        sym_funcs = self.ODEs.copy()
+        self.sym_funcs = self.ODEs.copy()
         for _ in range(self.L - 1):
-            sym_funcs.append([sp.diff(f, t) for f in sym_funcs[-1]])
+            self.sym_funcs.append([sp.diff(f, t) for f in self.sym_funcs[-1]])
 
-        for order, row in enumerate(sym_funcs, 1):
+        for order, row in enumerate(self.sym_funcs, 1):
             # Get the names of each lambda from the arguments for
             # dsympy.AutoFunc
             # zip() will automatically grab correct number
@@ -143,11 +146,13 @@ class Problem(Base):
                 index = ((order + 1)*self.ncoords) + coord
                 # ans = self.funcs[order][coord](t, *args)
                 args[index] = self.funcs[order][coord](t, *args)
+                self.calls += 1  # REMOVE FOR EFFICIENCY
 
         ydiffs = [y]
         for order in range(1, self.L + 1):
-            ydiffs.append(np.asarray(
-                args[order*self.ncoords:(order*self.ncoords) + len(y)]))
+            lo = order*self.ncoords
+            hi = lo + len(y)
+            ydiffs.append(np.asarray(args[lo:hi]))
 
         return ydiffs
 
@@ -250,14 +255,17 @@ class SHM(Problem):
 
         return xf, vf
 
-    def plot(self, t, y, mode='xve', file=None, data=None, **kwargs):
+    def plot(self, t, y, mode='xve', file=None, data=None, y0=None, **kwargs):
 
         fig, axs = plt.subplots(len(mode), sharex=True)
         nplt = 0
 
+        if y0 is None:
+            y0 = y[0, :]
+
         maxerr = errdiff = None
         if 'e' in mode:
-            analytic_xf, analytic_vf = self.analytical_factory(y[0, :])
+            analytic_xf, analytic_vf = self.analytical_factory(y0)
             analytic_x = np.asarray([analytic_xf(ti) for ti in t])
             analytic_v = np.asarray([analytic_vf(ti) for ti in t])
             diffx = y[:, 0] - analytic_x
@@ -296,13 +304,13 @@ class SHM(Problem):
             nplt += 1
 
         axs[-1].set_xlabel('$t$')
-        axs[-1].set_xlim(0, t[-1])
+        axs[-1].set_xlim(t[0], t[-1])
 
         if 'title' in kwargs:
             title = kwargs['title']
         else:
             title = rf'Spring with $\zeta = {self.zeta:.2f}$'
-            if 'data' is not None:
+            if data is not None:
                 for k, v in data.items():
                     if isinstance(v, float):
                         data[k] = format(v, '.2g')
@@ -385,13 +393,20 @@ class RTBP(Problem):
             period, y0
         """
 
-        assert len(vars) == 2, vars
-        assert len(consts) == 1, consts
+        if DEBUG:
+            assert len(vars) == 2, vars
+            assert len(consts) == 1, consts
+            assert isinstance(consts[0], numbers.Complex), \
+                (consts, type(consts[0]))
 
         x0 = consts[0]
-        y0 = 0
+        vy0 = vars[0]
+        period = vars[1]
 
-        return consts[1], np.array([consts[0], 0, 0, 0, vars[0], 0])
+        if DEBUG:
+            assert period > 0, period
+
+        return period, np.array([x0, 0, 0, 0, vy0, 0])
 
     def cost_exit(self, t, y):
         """
@@ -402,7 +417,12 @@ class RTBP(Problem):
             np.array([ dx, dy ])
         """
 
-        return y[-1, 0:2] - y[0, 0:2]
+        diff = y[-1, 0:2] - y[0, 0:2]
+
+        if VERBOSE and DEBUG:
+            print(f'diff = \n{diff}')
+
+        return diff
 
 
 

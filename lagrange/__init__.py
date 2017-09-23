@@ -45,3 +45,4 @@ _ver_assert(_mpl, (2, 0, 0))
 _ver_assert(_scipy, (0, 18, 1))
 
 from . import driver, problem, solver, main, bodies
+from .main import all_classes

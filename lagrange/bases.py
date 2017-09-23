@@ -42,8 +42,14 @@ class Base(object):
 
         fmt_attrs = [f'{attr}={getattr(self, attr):{fmt}}'
                      for attr, fmt in attrs]
-        fmt_attrs.extend(kwargs.items())  # order preserved in py > 3.6
+        fmt_attrs.extend(f'{k}={v}' for k, v in kwargs.items())
+        # order preserved in py > 3.6
 
         return Base.__repr__(self).format(', '.join(fmt_attrs))
+
+    @property
+    def _name(self):
+        "Shortcut for self.__class__.__name__"
+        return self.__class__.__name__
 
     subclasses = classmethod(all_subclasses)

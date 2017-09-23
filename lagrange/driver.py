@@ -40,16 +40,16 @@ class DriverBase(Base):
     t0: float
 
     def run(self):
-        self._calls += 1
-        if VERBOSE:
-            print(f'calls: {self._calls}')
+        pass
+        # self._calls += 1
+        # if VERBOSE:
+        #     print(f'calls: {self._calls}')
 
     def cost_function(self, vars, *consts):
-        # Todo: I think this bit needs to be Problem specific -> move to Problem
         period, y0 = self.problem.cost_init(vars, *consts)
         t, y = self.run(y0, tf=period - self.t0)
-        return self.problem.cost_exit(t, y)
-
+        out = self.problem.cost_exit(t, y)
+        return out
 
 class Driver(DriverBase):
     def __init__(self,
@@ -111,6 +111,7 @@ class Driver(DriverBase):
 
         self.stepper = _stepper.Stepper(self.stepsize_control, self.explicit,
                                         self.implicit)
+        self.time = 0
 
     def __repr__(self):
         return self._make_repr('problem', 'h0', 'L', 'K')
@@ -141,7 +142,8 @@ class Driver(DriverBase):
         ts = [t0]
         if VERBOSE:
             total_iters = int((tf - t0)/self.h0)
-            timer = Timer(5)
+        self.time = 0
+        timer = Timer(5)
 
         while t < tf:
             h1, t, y1 = self.stepper.predict(t, y, yd, k)
@@ -162,28 +164,29 @@ class Driver(DriverBase):
                       f'(~{100.*counter/total_iters:.1f}%).')
 
         if VERBOSE:
+
             print('Finished iterating.')
             print(f'y has length {len(y):,} and final value')
             print(f' yf = [{", ".join(format(x, ".3g") for x in y[-1])}].')
             print(f'Total time elapsed: {timer()}.')
             print('_'*30, end='\n\n')
 
+        self.time = timer.toc
+
         super().run()
         return np.asarray(ts), np.asarray(y)
 
 
-class SciPy(DriverBase):
-    def __init__(self, problem: _problem.Problem, h0: float = 0.,
+class SciPyODE(DriverBase):
+    def __init__(self, problem: _problem.Problem, h0: float = 0., K: int = None,
                  t0: float = 0.,
                  tf: float = None, method_name: str = 'odeint', **kwargs):
         self.problem = problem
         self.h0 = h0
         self.t0 = t0
         self.tf = tf
-        if method_name.lower() == 'ode45':
-            self.method = 'ode45'
-        else:  # ignore method_name == 'obr' or 'adams', this is only for testing
-            self.method = 'odeint'
+        self.K = K
+        self.method = method_name.lower().strip()
 
         assert problem.L == 1, problem.L
 
@@ -209,19 +212,35 @@ class SciPy(DriverBase):
             assert tf is not None, (tf, self.tf)
         t = np.arange(t0, tf, self.h0)
 
-        if self.method == 'ode45':
+        if self.method in ('ode45', 'adams'):
             if VERBOSE:
-                print('\nUsing ode45')
+                print(f'\nUsing {self.method}')
+
             ode = integrate.ode(self.f_ode)
-            ode.set_integrator('dopri5', atol=1e-12, rtol=1e-12, verbosity=1,
-                               nsteps=4)
+
+            if self.method == 'ode45':
+                ode.set_integrator('dopri5', max_step=self.h0,
+                                   first_step=self.h0,
+                                   verbosity=VERBOSE, nsteps=self.K)
+            elif self.method == 'adams':
+                ode.set_integrator('lsoda')
+            else:
+                raise Exception
+
             ode.set_initial_value(y0, t0)
             y = np.empty((len(t), len(y0)))
+
             for index, ti in enumerate(t):
                 y[index, :] = ode.integrate(ti)
-        else:
-            print('\nUsing odeint')
+
+        elif self.method == 'odeint':
+            if VERBOSE:
+                print('\nUsing odeint')
+                print(f'y0 = \n {y0}\ntf = {tf:.5e}')
             y = integrate.odeint(self.f_odeint, y0, t, rtol=1e-12, atol=1e-12)
+
+        else:
+            raise ValueError(f'method must be "ode45", "adams" or "odeint"')
 
         super().run()
         return t, y
